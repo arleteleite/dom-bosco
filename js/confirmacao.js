@@ -4,7 +4,9 @@
 //   - as notas confirmadas ficam num registro à parte, que "Limpar tudo" não apaga (evita lançar duas vezes);
 //   - dá para desfazer a confirmação (estoque e histórico voltam ao que eram).
 
-import { RECEITAS, FORNECEDORES, ultimaCompra } from './dados.js';
+import { FORNECEDORES } from './dados.js';
+import { produtosAfetados } from './produtos.js';
+import { acharFornecedorDaNota } from './cadastro.js';
 import { agregarEntrada, resumir, insumoDe } from './revisao.js';
 
 /** Limite de variação de preço (em %) a partir do qual o piloto avisa. A pessoa pode mudar na tela. */
@@ -46,30 +48,10 @@ export function podeConfirmar(r) {
   return { pode: true };
 }
 
-const precoPorUso = (precoEmbalagem, insumo) => precoEmbalagem / insumo.compra.qtdUso;
-
-/** Custo dos ingredientes de uma receita, com os preços mais recentes de cada insumo. */
-function custoDaReceita(receita) {
-  return receita.ingredientes.reduce((soma, ing) => {
-    const insumo = insumoDe(ing.insumoId);
-    return soma + ing.qtd * precoPorUso(ultimaCompra(insumo).preco, insumo);
-  }, 0);
-}
-
-/** Receitas que usam o insumo e quanto o custo dos ingredientes mudou só por causa dele. */
-function receitasAfetadas(insumoId, precoAnterior, precoNovo) {
-  const insumo = insumoDe(insumoId);
-  return RECEITAS.filter((rc) => rc.ingredientes.some((i) => i.insumoId === insumoId)).map((rc) => {
-    const ing = rc.ingredientes.find((i) => i.insumoId === insumoId);
-    const delta = ing.qtd * (precoPorUso(precoNovo, insumo) - precoPorUso(precoAnterior, insumo));
-    const custoDepois = custoDaReceita(rc);
-    const custoAntes = custoDepois - delta;
-    return {
-      id: rc.id, nome: rc.nome, area: rc.area, precoVenda: rc.precoPraticado,
-      custoAntes, custoDepois, delta,
-      sobraAntes: rc.precoPraticado - custoAntes, sobraDepois: rc.precoPraticado - custoDepois,
-    };
-  });
+/** Fornecedor de uma nota: o cadastrado com o mesmo CNPJ, ou só o nome que veio na nota. */
+export function fornecedorDaNota(r) {
+  const cadastrado = acharFornecedorDaNota(r.emitente);
+  return cadastrado ? { id: cadastrado.id, nome: cadastrado.nome } : { id: null, nome: r.emitente?.nome ?? '(fornecedor não identificado)' };
 }
 
 /**
@@ -84,7 +66,7 @@ export function confirmarCompra(r, agora = new Date()) {
   const origem = origemDoHistorico(r);
   const fornecedor = r.tipo === 'manual'
     ? { id: r.fornecedorId, nome: FORNECEDORES.find((f) => f.id === r.fornecedorId)?.nome ?? r.emitente.nome }
-    : { id: null, nome: r.emitente?.nome ?? '(fornecedor não identificado)' };
+    : fornecedorDaNota(r);
 
   const mudancas = [];
   for (const g of agregarEntrada(r)) {
@@ -117,7 +99,7 @@ export function confirmarCompra(r, agora = new Date()) {
 
   // As receitas só são calculadas depois que todos os preços da compra entraram.
   for (const m of mudancas) {
-    if (m.precoAnterior !== null && m.ehPrecoAtual) m.receitas = receitasAfetadas(m.insumoId, m.precoAnterior, m.preco);
+    if (m.precoAnterior !== null && m.ehPrecoAtual) m.receitas = produtosAfetados(m.insumoId, m.precoAnterior);
   }
 
   r.confirmacao = { quando: agora, dias, origem, mudancas };

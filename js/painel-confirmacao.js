@@ -76,11 +76,12 @@ function htmlAlerta(m) {
     ? `<ul class="alerta-preco__receitas">${m.receitas.map((rc) => `
         <li>
           <strong>${esc(rc.nome)}</strong> <span class="chip chip--neutro">${rc.area === 'pizzaria' ? 'pizzaria' : 'padaria'}</span><br>
-          Custo dos ingredientes: ${fmtMoeda(rc.custoAntes)} → <strong>${fmtMoeda(rc.custoDepois)}</strong>
-          (${rc.delta >= 0 ? '+' : '−'}${fmtMoeda(Math.abs(rc.delta))} por unidade).
-          Sobra sobre o preço de venda de ${fmtMoeda(rc.precoVenda)}: ${fmtMoeda(rc.sobraAntes)} → <strong>${fmtMoeda(rc.sobraDepois)}</strong>.
+          Custo por unidade: ${fmtMoeda(rc.custoAntes)} → <strong>${fmtMoeda(rc.custoDepois)}</strong>
+          (${rc.delta >= 0 ? '+' : '−'}${fmtMoeda(Math.abs(rc.delta))}).
+          ${rc.precoVenda === null ? 'Sem preço de venda informado.' : `Sobra sobre o preço de venda de ${fmtMoeda(rc.precoVenda)}: ${fmtMoeda(rc.sobraAntes)} → <strong>${fmtMoeda(rc.sobraDepois)}</strong>.`}
+          <a class="link" href="#/precificacao" data-ver-produto="${esc(rc.id)}">Abrir a ficha →</a>
         </li>`).join('')}</ul>`
-    : `<p class="sub">${m.ehPrecoAtual ? 'Nenhuma das 3 receitas de exemplo usa este insumo.' : 'Compra de data antiga: não muda o preço de hoje, então nenhuma receita foi afetada.'}</p>`;
+    : `<p class="sub">${m.ehPrecoAtual ? 'Nenhum produto cadastrado em Precificação usa este insumo.' : 'Compra de data antiga: não muda o preço de hoje, então nenhuma receita foi afetada.'}</p>`;
   return `
     <article class="alerta-preco alerta-preco--${subiu ? 'subiu' : 'caiu'}" data-alerta-de="${esc(m.insumoId)}">
       <strong>${esc(insumo.nome)} ${subiu ? 'subiu' : 'caiu'} ${semSinalDeMais(Math.abs(m.variacao))}</strong>
@@ -142,7 +143,7 @@ export function htmlConfirmada(r) {
     <section class="alertas-preco" aria-label="Alertas de preço">
       <h3>Alertas de preço <span class="sub">(variação de ${fmtNumero(limite)}% ou mais)</span></h3>
       ${alertas.length ? alertas.map(htmlAlerta).join('') : `<p class="alertas-preco__vazio">Nenhum insumo desta compra variou ${fmtNumero(limite)}% ou mais.</p>`}
-      <p class="sub">A sobra considera só o custo dos ingredientes das receitas de exemplo, sem gastos gerais nem impostos.</p>
+      <p class="sub">O custo vem das fichas técnicas de Precificação (ingredientes, perdas e sub-receitas), sem gastos gerais nem impostos. Os preços de venda são de exemplo, salvo os que você alterou.</p>
     </section>
     ${htmlItensConfirmados(r)}
     <div class="conf__confirmar conf__confirmar--desfazer">

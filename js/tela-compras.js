@@ -10,7 +10,9 @@ import {
   criarRevisao, aplicarAcao, atualizarTextosDaLinha,
   htmlConferenciaDosItens, htmlTopoConferencia, htmlRodapeConferencia, htmlStatusConferencia,
 } from './revisao.js';
-import { htmlFormularioManual, ligarFormularioManual, htmlCompraManual } from './compra-manual.js';
+import { htmlFormularioManual, ligarFormularioManual, htmlCompraManual, recarregarOpcoesManual } from './compra-manual.js';
+import { abrirFormInsumo, abrirFormFornecedor } from './tela-cadastros.js';
+import { sugerirCadastro, acharFornecedorDaNota } from './cadastro.js';
 import { impressaoDigital, acharArquivoIdentico, acharNotaDuplicada, acharCompraDuplicada } from './duplicidade.js';
 import { config, registroConfirmadas, confirmarCompra, desfazerConfirmacao, alertasDaConfirmacao } from './confirmacao.js';
 import { htmlConfigAlerta, htmlConfirmada } from './painel-confirmacao.js';
@@ -119,6 +121,22 @@ function htmlValidacoes(r) {
   return chips.join(' ');
 }
 
+/** Fornecedor da nota: já cadastrado (reconhecido pelo CNPJ) ou novo, com botão para cadastrar. */
+function htmlFornecedorDaNota(r) {
+  const e = r.emitente;
+  if (!e?.nome) return '';
+  const cadastrado = acharFornecedorDaNota(e);
+  if (cadastrado) {
+    return `<p class="conferencia conferencia--ok" role="status" data-fornecedor-nota>Fornecedor cadastrado: <strong>${esc(cadastrado.nome)}</strong>${cadastrado.ativo === false ? ' (inativo: reative em Fornecedores se for voltar a comprar)' : ''}.</p>`;
+  }
+  return `
+    <div class="conferencia conferencia--alerta" role="status" data-fornecedor-nota>
+      <strong>Fornecedor novo.</strong> ${esc(e.nome)}${e.documento ? ` (CNPJ/CPF ${esc(formatarCnpjCpf(e.documento))})` : ''} ainda não está no cadastro.
+      <button type="button" class="botao botao--pequeno botao--secundario" data-acao="novo-fornecedor">Cadastrar fornecedor</button>
+      <span class="sub">Opcional: a compra pode ser confirmada sem cadastrar.</span>
+    </div>`;
+}
+
 function htmlMercadoria(r) {
   const e = r.emitente;
   const avisos = r.avisos.map((a) => `<p class="conferencia conferencia--alerta" role="status">${esc(a)}</p>`).join('');
@@ -142,6 +160,7 @@ function htmlMercadoria(r) {
       ${r.chave ? `<div class="dados-nota__chave"><dt>Chave de acesso</dt><dd>${esc(formatarChave(r.chave))}</dd></div>` : ''}
     </dl>
     ${avisos}
+    ${htmlFornecedorDaNota(r)}
     ${htmlConferenciaDosItens(r)}
     ${htmlNaoLidas(r)}
     <div class="resultado__rodape">
@@ -538,6 +557,8 @@ export function iniciarCompras(conteudo) {
     }
     const linha = botao.closest('[data-linha]');
     const indice = linha ? Number(linha.dataset.linha) : 0;
+    if (botao.dataset.acao === 'novo-fornecedor') { cadastrarFornecedorDaNota(r); return; }
+    if (botao.dataset.acao === 'novo-insumo') { cadastrarInsumoDaNota(r, indice); return; }
     aplicarAcao(r, indice, botao.dataset.acao);
     redesenharCartao(r.id, linha ? `ins-${r.id}-${indice}` : null);
   });
@@ -572,6 +593,37 @@ export function iniciarCompras(conteudo) {
 
   desenhar();
   atualizarNotaDoLimite();
+}
+
+/** "Fornecedor novo": abre o cadastro já preenchido com o nome e o CNPJ da nota. */
+function cadastrarFornecedorDaNota(r) {
+  abrirFormFornecedor({
+    inicial: { nome: r.emitente.nome, documento: r.emitente.documento ?? '' },
+    aviso: 'Nome e CNPJ vieram da nota. Confira antes de cadastrar.',
+    aoSalvar: (f) => {
+      recarregarOpcoesManual(raizAtual);
+      desenhar(); // todas as notas deste fornecedor passam a mostrá-lo como cadastrado
+      colocarAviso({ nivel: 'sucesso', titulo: 'Fornecedor cadastrado', detalhe: `${f.nome} já está no cadastro. As próximas notas dele serão reconhecidas pelo CNPJ.`, para: r.id });
+    },
+  });
+}
+
+/** Item sem insumo no cadastro: abre o formulário preenchido com o que a nota diz e, ao salvar, já liga o item ao novo insumo. */
+function cadastrarInsumoDaNota(r, indice) {
+  const item = r.itens[indice];
+  const fornecedor = acharFornecedorDaNota(r.emitente);
+  const sugestao = sugerirCadastro(item, fornecedor?.id ?? '');
+  abrirFormInsumo({
+    inicial: sugestao,
+    aviso: `Preenchido com o item ${item.numero} da nota ("${item.descricao}"). ${sugestao.aviso} A categoria você escolhe.`,
+    aoSalvar: (insumo) => {
+      aplicarAcao(r, indice, 'insumo', insumo.id); // liga o item ao insumo novo e recalcula a quantidade
+      recarregarOpcoesManual(raizAtual);
+      desenhar(); // as outras notas abertas também passam a oferecer o insumo novo
+      colocarAviso({ nivel: 'sucesso', titulo: 'Insumo cadastrado e ligado', detalhe: `${insumo.nome} foi cadastrado e ligado ao item ${item.numero}. Confira a quantidade que entra no estoque.`, para: r.id });
+      irParaResultado(r.id);
+    },
+  });
 }
 
 /** Confirma (ou desfaz) uma compra: mexe no estoque e no histórico, e avisa o resultado. */

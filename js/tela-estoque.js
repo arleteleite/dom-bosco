@@ -10,8 +10,10 @@ import { fmtQtd, fmtValidade, fmtMoeda, fmtPercentual, dataDeDias, esc } from '.
 const FATOR_DIGITACAO = { g: 1000, ml: 1000, un: 1 };
 const ROTULO_DIGITACAO = { g: 'kg', ml: 'L', un: 'un' };
 
-const CATEGORIAS = [...new Set(INSUMOS.map((i) => i.categoria))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-const subgruposDe = (categoria) => [...new Set(INSUMOS.filter((i) => i.categoria === categoria).map((i) => i.subgrupo))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+// Só insumos ativos aparecem; as categorias são lidas a cada uso porque o cadastro pode receber insumos novos.
+const ativos = () => INSUMOS.filter((i) => i.ativo !== false);
+const categorias = () => [...new Set(ativos().map((i) => i.categoria))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+const subgruposDe = (categoria) => [...new Set(ativos().filter((i) => i.categoria === categoria).map((i) => i.subgrupo))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
 // O estado fica fora da função para os filtros sobreviverem à troca de tela.
 const estado = {
@@ -59,7 +61,7 @@ function contagens() {
   let todos = 0;
   let baixo = 0;
   let vence = 0;
-  for (const i of INSUMOS) {
+  for (const i of ativos()) {
     if (!passaCategoriaEBusca(i)) continue;
     todos += 1;
     const s = situacao(i);
@@ -83,6 +85,7 @@ function chipDeVariacao(atual, anterior) {
 function htmlPreco(insumo) {
   const h = insumo.historico;
   const ultima = ultimaCompra(insumo);
+  if (!ultima) return '<span class="sub item__preco">Ainda sem compra: o preço aparece depois da primeira compra confirmada.</span>';
   const anterior = h.length > 1 ? h[h.length - 2].preco : null;
   return `<span class="sub item__preco">Último preço: ${fmtMoeda(ultima.preco)} por ${esc(insumo.compra.rotulo)} · ${fmtMoeda(precoPorBase(insumo, ultima.preco))}/${rotuloBase(insumo)} ${chipDeVariacao(ultima.preco, anterior)}</span>`;
 }
@@ -110,7 +113,7 @@ function htmlItem(insumo) {
   const s = situacao(insumo);
   const { saldo, minimo, validadeEmDias } = insumo.estoque;
   const classe = s.abaixoDoMinimo ? ' item--alerta' : s.venceEmBreve ? ' item--aviso' : '';
-  const largura = Math.max(2, Math.min(100, Math.round((saldo / minimo) * 100)));
+  const largura = minimo > 0 ? Math.max(2, Math.min(100, Math.round((saldo / minimo) * 100))) : (saldo > 0 ? 100 : 2);
 
   const chips = [];
   if (s.abaixoDoMinimo) chips.push('<span class="chip chip--alerta">abaixo do mínimo</span>');
@@ -130,11 +133,11 @@ function htmlItem(insumo) {
     <li class="item${classe}" data-id="${esc(insumo.id)}">
       <div class="item__nome">
         <strong>${esc(insumo.nome)}</strong>
-        <span class="sub">${esc(insumo.categoria)} › ${esc(insumo.subgrupo)}</span>
+        <span class="sub">${esc(insumo.categoria)} › ${esc(insumo.subgrupo)}${insumo.novo && insumo.historico.length === 0 ? ' · <strong>novo</strong>' : ''}</span>
         ${htmlPreco(insumo)}
       </div>
       <div class="item__saldo">
-        <span class="item__qtd">${fmtQtd(saldo, insumo.uso)}<small>mín. ${fmtQtd(minimo, insumo.uso)}</small></span>
+        <span class="item__qtd">${fmtQtd(saldo, insumo.uso)}<small>${minimo > 0 ? `mín. ${fmtQtd(minimo, insumo.uso)}` : 'sem mínimo definido'}</small></span>
         <div class="barra" aria-hidden="true"><span style="width:${largura}%"></span></div>
         ${contado}
         ${entradaDeCompra(insumo)}
@@ -210,7 +213,7 @@ function desenhar(raiz) {
     htmlFiltro('baixo', 'Abaixo do mínimo', n.baixo) +
     htmlFiltro('vence', 'Vence em breve', n.vence);
 
-  const itens = INSUMOS.filter(passaNoFiltro).sort(
+  const itens = ativos().filter(passaNoFiltro).sort(
     (a, b) => prioridade(a) - prioridade(b)
       || a.categoria.localeCompare(b.categoria, 'pt-BR')
       || a.subgrupo.localeCompare(b.subgrupo, 'pt-BR')
@@ -309,7 +312,7 @@ function ligarEventos(raiz) {
 
 export function telaEstoque() {
   const opcoes = ['<option value="todas">Todas as categorias</option>']
-    .concat(CATEGORIAS.map((c) => `<option value="${esc(c)}"${c === estado.categoria ? ' selected' : ''}>${esc(c)}</option>`))
+    .concat(categorias().map((c) => `<option value="${esc(c)}"${c === estado.categoria ? ' selected' : ''}>${esc(c)}</option>`))
     .join('');
 
   return `

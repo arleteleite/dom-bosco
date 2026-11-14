@@ -1,7 +1,7 @@
 // Compra sem nota (frutaria, mercado pequeno, recibo ou nada): lançamento rápido em poucos campos.
 // A regra do projeto (RNF-001) é que isto seja mais rápido que o papel: por isso a tela mede o tempo.
 
-import { FORNECEDORES, insumosAgrupados } from './dados.js';
+import { fornecedoresAtivos, insumosAgrupados } from './dados.js';
 import { htmlEntrada, insumoDe } from './revisao.js';
 import { formatarEmissao } from './leitor-xml.js';
 import { fmtMoeda, fmtNumero, esc } from './formato.js';
@@ -10,7 +10,8 @@ const arredondar = (v, casas = 2) => Math.round(v * 10 ** casas) / 10 ** casas;
 const hojeISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const ROTULO_COMPROVANTE = { nenhum: 'Sem comprovante', recibo: 'Recibo' };
 
-const fornecedoresExternos = FORNECEDORES.filter((f) => f.id !== 'casa');
+// Lido a cada uso (não uma vez só): fornecedor cadastrado ou inativado depois aparece/some na hora.
+const fornecedoresExternos = () => fornecedoresAtivos().filter((f) => f.id !== 'casa');
 const LIMITE_RECIBO = 5 * 1024 * 1024;
 
 // ---- Formulário --------------------------------------------------------------------
@@ -49,7 +50,7 @@ export function htmlFormularioManual() {
           <label>
             <span class="rotulo-pequeno">Fornecedor</span>
             <select class="campo" name="fornecedor">
-              ${fornecedoresExternos.map((f) => `<option value="${esc(f.id)}"${f.id === 'frutaria' ? ' selected' : ''}>${esc(f.nome)} · ${esc(f.tipo)}</option>`).join('')}
+              ${fornecedoresExternos().map((f) => `<option value="${esc(f.id)}"${f.id === 'frutaria' ? ' selected' : ''}>${esc(f.nome)} · ${esc(f.tipo)}</option>`).join('')}
             </select>
           </label>
           <fieldset class="manual__comprovante">
@@ -112,6 +113,21 @@ function atualizarLinha(linha) {
 
 const linhaVazia = (linha) => ['insumo', 'qtd', 'valor'].every((c) => linha.querySelector(`[data-m="${c}"]`).value === '');
 
+/** Depois de cadastrar insumo ou fornecedor, atualiza as listas do formulário sem apagar o que foi digitado. */
+export function recarregarOpcoesManual(raiz) {
+  raiz.querySelectorAll('select[data-m="insumo"]').forEach((sel) => {
+    const atual = sel.value;
+    sel.innerHTML = `<option value="">Escolha o insumo…</option>${insumosAgrupados().map((g) => `<optgroup label="${esc(g.rotulo)}">${g.itens.map((i) => `<option value="${esc(i.id)}">${esc(i.nome)}</option>`).join('')}</optgroup>`).join('')}`;
+    sel.value = atual;
+  });
+  const forn = raiz.querySelector('select[name="fornecedor"]');
+  if (forn) {
+    const atual = forn.value;
+    forn.innerHTML = fornecedoresExternos().map((f) => `<option value="${esc(f.id)}">${esc(f.nome)} · ${esc(f.tipo)}</option>`).join('');
+    forn.value = fornecedoresExternos().some((f) => f.id === atual) ? atual : forn.options[0]?.value ?? '';
+  }
+}
+
 export function ligarFormularioManual(raiz, aoRegistrar) {
   const form = raiz.querySelector('[data-form-manual]');
   const area = form.querySelector('[data-linhas-manual]');
@@ -128,7 +144,7 @@ export function ligarFormularioManual(raiz, aoRegistrar) {
   const campoArquivo = form.querySelector('[data-arquivo-recibo]');
   const nomeArquivo = form.querySelector('[data-arquivo-nome]');
   const botaoTirar = form.querySelector('[data-acao-manual="tirar-recibo"]');
-  const fornecedorAtual = () => fornecedoresExternos.find((f) => f.id === form.elements.fornecedor.value);
+  const fornecedorAtual = () => fornecedoresExternos().find((f) => f.id === form.elements.fornecedor.value);
 
   const limparArquivo = () => {
     if (arquivoRecibo) URL.revokeObjectURL(arquivoRecibo.url);
@@ -223,7 +239,7 @@ export function ligarFormularioManual(raiz, aoRegistrar) {
     }
 
     const dados = new FormData(form);
-    const fornecedor = fornecedoresExternos.find((f) => f.id === dados.get('fornecedor'));
+    const fornecedor = fornecedoresExternos().find((f) => f.id === dados.get('fornecedor'));
 
     let recibo = null;
     if (dados.get('comprovante') === 'recibo') {

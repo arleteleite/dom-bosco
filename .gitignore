@@ -1,3 +1,9 @@
 # documentos internos do projeto: não publicar
 PLANO.md
 ROTEIRO.md
+PLANO-EXECUCAO.md
+# documento de perguntas para a proprietária e o gerador dele (ficam em docs/validacao-piloto/)
+Perguntas-do-piloto-Dom-Bosco.docx
+perguntas-por-tela.json
+gerar_documento_perguntas.py
+__pycache__/

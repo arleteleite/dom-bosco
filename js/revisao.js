@@ -1,7 +1,7 @@
 // Conferência de uma nota: cada item é ligado a um insumo, trocado ou ignorado, e a quantidade
 // que entra no estoque é conferida. Nada daqui grava: a compra só é confirmada na etapa seguinte.
 
-import { INSUMOS, rotuloBase, insumosAgrupados } from './dados.js';
+import { rotuloBase, insumosAgrupados, buscarInsumo, insumosAtivos } from './dados.js';
 import { sugerir, converterQuantidade, IGNORAR } from './vinculo.js';
 import { fmtMoeda, fmtNumero, esc } from './formato.js';
 
@@ -10,8 +10,7 @@ const FATOR = { g: 1000, ml: 1000, un: 1 };
 const UNIDADE_TELA = { g: 'kg', ml: 'L', un: 'un' };
 const arredondar = (v, casas = 2) => Math.round(v * 10 ** casas) / 10 ** casas;
 
-const insumoPorId = new Map(INSUMOS.map((i) => [i.id, i]));
-export const insumoDe = (id) => insumoPorId.get(id) ?? null;
+export const insumoDe = (id) => buscarInsumo(id);
 
 /** O que o piloto já aprendeu nesta sessão: fornecedor + código do item → insumo (ou "ignorar"). */
 export const memoria = new Map();
@@ -33,7 +32,7 @@ export function criarRevisao(r) {
   r.revisao = {
     fornecedor,
     itens: r.itens.map((item) => {
-      const s = sugerir(item, INSUMOS, memoria, fornecedor);
+      const s = sugerir(item, insumosAtivos(), memoria, fornecedor);
       const linha = {
         chave: s.chave, candidatos: s.candidatos, sugestao: s.sugestao,
         insumoId: s.sugestao?.tipo === 'insumo' ? s.sugestao.id : null,
@@ -195,7 +194,9 @@ function htmlAcoes(linha) {
   const ignorar = linha.status === 'ignorado'
     ? '<button type="button" class="botao botao--pequeno botao--secundario" data-acao="desfazer">Desfazer</button>'
     : (linha.status === 'sugerido' && linha.sugestao.tipo === 'ignorar' ? '' : '<button type="button" class="botao botao--pequeno botao--secundario" data-acao="ignorar">Ignorar</button>');
-  return `<div class="conf-item__acoes">${confirmarOuNada}${ignorar}</div>`;
+  // Item que não é nenhum insumo da lista: dá para cadastrar um novo a partir dele (formulário já preenchido com a nota).
+  const novo = linha.status === 'ignorado' ? '' : '<button type="button" class="botao botao--pequeno botao--secundario" data-acao="novo-insumo">Cadastrar como novo insumo</button>';
+  return `<div class="conf-item__acoes">${confirmarOuNada}${novo}${ignorar}</div>`;
 }
 
 /** O sistema classifica sozinho: depois de escolher o insumo, mostra em que categoria e subgrupo ele foi parar. */

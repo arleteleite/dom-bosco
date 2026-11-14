@@ -3,7 +3,7 @@
 // Sai do piloto quando a tela de Estoque (etapa 3) assumir a lista de insumos.
 
 import {
-  FORNECEDORES, INSUMOS, RECEITAS, ORIGENS,
+  FORNECEDORES, INSUMOS, ORIGENS,
   precoPorBase, rotuloBase, ultimaCompra, variacaoUltima, situacao,
 } from './dados.js';
 import { fmtMoeda, fmtPercentual, fmtQtd, fmtValidade, esc } from './formato.js';
@@ -42,6 +42,7 @@ function tabelaInsumos() {
     const ultima = ultimaCompra(i);
     const variacao = variacaoUltima(i);
     const destaque = Math.abs(variacao) >= 0.1 ? ' class="destaque"' : '';
+    if (!ultima) return `<tr><td><strong>${esc(i.nome)}</strong><span class="sub">${esc(i.categoria)} › ${esc(i.subgrupo)}</span></td><td>${esc(i.compra.rotulo)}</td><td class="num" colspan="5"><span class="sub">cadastrado agora, ainda sem compra</span></td></tr>`;
     return `
     <tr>
       <td><strong>${esc(i.nome)}</strong><span class="sub">${esc(i.categoria)} › ${esc(i.subgrupo)}</span></td>
@@ -64,41 +65,12 @@ function tabelaInsumos() {
     </table></div>`;
 }
 
-function cartaoReceita(r) {
-  let total = 0;
-  const linhas = r.ingredientes.map((ing) => {
-    const insumo = porId[ing.insumoId];
-    const custo = (ing.qtd * ultimaCompra(insumo).preco) / insumo.compra.qtdUso;
-    total += custo;
-    return `
-      <tr>
-        <td>${esc(insumo.nome)}</td>
-        <td class="num">${fmtQtd(ing.qtd, insumo.uso)}</td>
-        <td class="num">${fmtMoeda(custo)}</td>
-      </tr>`;
-  }).join('');
-
-  return `
-    <article class="cartao cartao--receita">
-      <span class="selo">${r.area === 'pizzaria' ? 'Pizzaria' : 'Padaria'}</span>
-      <h3>${esc(r.nome)}</h3>
-      <div class="tabela-wrap"><table class="tabela tabela--compacta">
-        <thead>${cabecalho([['Ingrediente'], ['Quantidade', true], ['Custo', true]])}</thead>
-        <tbody>${linhas}</tbody>
-        <tfoot>
-          <tr><td colspan="2">Custo dos ingredientes</td><td class="num">${fmtMoeda(total)}</td></tr>
-          <tr><td colspan="2">Preço de venda (inventado)</td><td class="num">${fmtMoeda(r.precoPraticado)}</td></tr>
-        </tfoot>
-      </table></div>
-    </article>`;
-}
-
 export function telaDados() {
   return `
     <section class="cartao cartao--nota">
       <span class="selo">Etapa 2 · conferência dos dados de exemplo</span>
       <p>
-        <strong>Tudo aqui é inventado.</strong>
+        <strong>Os números são inventados.</strong>
         Os nomes dos insumos e o jeito de comprar (saco, fardo, caixa, pacote) vêm da lista do UNIQ.
         Os preços, as quantidades por embalagem, os estoques, as validades, os fornecedores
         e as receitas foram criados só para o piloto. Corrija o que não fizer sentido.
@@ -119,8 +91,7 @@ export function telaDados() {
     </section>
 
     <section class="bloco">
-      <h2>Receitas de exemplo <span class="etiqueta-numero">${RECEITAS.length}</span></h2>
-      <p class="bloco__nota">Servem para mostrar quais produtos são afetados quando um insumo muda de preço (etapa 7).</p>
-      <div class="grade-receitas">${RECEITAS.map(cartaoReceita).join('')}</div>
+      <h2>Receitas e fichas técnicas</h2>
+      <p class="bloco__nota">Ficam na tela <a class="link" href="#/precificacao">Precificação</a>.</p>
     </section>`;
 }

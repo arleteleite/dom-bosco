@@ -20,12 +20,14 @@ export const ORIGENS = {
   foto: 'Nota (foto)',
 };
 
+// Campos: documento (CNPJ/CPF, só dígitos; vazio nos de exemplo), telefone, contato, prazo (prazo e dia de entrega),
+// ativo (false = inativo: some das listas de escolha, mas o histórico de compras continua ligado a ele).
 export const FORNECEDORES = [
-  { id: 'atacado', nome: 'Atacado Exemplo', tipo: 'Atacado', comprovante: 'XML por e-mail' },
-  { id: 'frios', nome: 'Frios Exemplo', tipo: 'Distribuidora', comprovante: 'Nota em XML ou recibo' },
-  { id: 'mercado', nome: 'Mercado Exemplo', tipo: 'Compras pequenas', comprovante: 'Cupom fiscal' },
-  { id: 'frutaria', nome: 'Frutaria Exemplo', tipo: 'Frutaria', comprovante: 'Recibo ou nada' },
-  { id: 'casa', nome: 'Produção da casa', tipo: 'Interno', comprovante: 'Sem comprovante' },
+  { id: 'atacado', nome: 'Atacado Exemplo', tipo: 'Atacado', comprovante: 'XML por e-mail', documento: '', telefone: '', contato: '', prazo: '', ativo: true },
+  { id: 'frios', nome: 'Frios Exemplo', tipo: 'Distribuidora', comprovante: 'Nota em XML ou recibo', documento: '', telefone: '', contato: '', prazo: '', ativo: true },
+  { id: 'mercado', nome: 'Mercado Exemplo', tipo: 'Compras pequenas', comprovante: 'Cupom fiscal', documento: '', telefone: '', contato: '', prazo: '', ativo: true },
+  { id: 'frutaria', nome: 'Frutaria Exemplo', tipo: 'Frutaria', comprovante: 'Recibo ou nada', documento: '', telefone: '', contato: '', prazo: '', ativo: true },
+  { id: 'casa', nome: 'Produção da casa', tipo: 'Interno', comprovante: 'Sem comprovante', documento: '', telefone: '', contato: '', prazo: '', ativo: true },
 ];
 
 // Padrões de variação de preço para o histórico (fração sobre o preço atual).
@@ -159,6 +161,7 @@ grupo('Produção da casa', 'Pães', [
 ]);
 
 export const INSUMOS = base.map((b, i) => ({
+  ativo: true,
   id: b.id,
   nome: b.nome,
   categoria: b.categoria,
@@ -180,7 +183,7 @@ export const INSUMOS = base.map((b, i) => ({
 export function insumosAgrupados(excluir = []) {
   const grupos = new Map();
   for (const i of INSUMOS) {
-    if (excluir.includes(i.id)) continue;
+    if (i.ativo === false || excluir.includes(i.id)) continue;
     if (!grupos.has(i.categoria)) grupos.set(i.categoria, []);
     grupos.get(i.categoria).push(i);
   }
@@ -189,49 +192,7 @@ export function insumosAgrupados(excluir = []) {
     .map(([rotulo, itens]) => ({ rotulo, itens: itens.sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR')) }));
 }
 
-// Receitas fictícias (usadas só no alerta de variação de preço, etapa 7).
-// Quantidades na unidade de uso do insumo (g, ml ou un).
-export const RECEITAS = [
-  {
-    id: 'pizza-mussarela-g',
-    nome: 'Pizza de mussarela G',
-    area: 'pizzaria',
-    ingredientes: [
-      { insumoId: 'trigo', qtd: 300 },
-      { insumoId: 'queijo', qtd: 350 },
-      { insumoId: 'tomate', qtd: 120 },
-      { insumoId: 'oregano', qtd: 2 },
-      { insumoId: 'emb-pizza-g', qtd: 1 },
-    ],
-    precoPraticado: 62,
-  },
-  {
-    id: 'mini-pao-queijo-presunto',
-    nome: 'Mini pão com queijo e presunto',
-    area: 'padaria',
-    ingredientes: [
-      { insumoId: 'pao-mini', qtd: 1 },
-      { insumoId: 'queijo', qtd: 25 },
-      { insumoId: 'presunto', qtd: 25 },
-    ],
-    precoPraticado: 7,
-  },
-  {
-    id: 'bolo-macaxeira',
-    nome: 'Bolo de macaxeira (fatia)',
-    area: 'padaria',
-    ingredientes: [
-      { insumoId: 'macaxeira', qtd: 90 },
-      { insumoId: 'acucar-refinado', qtd: 45 },
-      { insumoId: 'ovos', qtd: 0.6 },
-      { insumoId: 'leite', qtd: 50 },
-      { insumoId: 'coco', qtd: 18 },
-      { insumoId: 'margarina', qtd: 18 },
-      { insumoId: 'ferm-bolo', qtd: 2 },
-    ],
-    precoPraticado: 6,
-  },
-];
+// As receitas e fichas técnicas ficam em produtos.js (etapa 11).
 
 // ---------------------------------------------------------------------
 // Funções de apoio
@@ -252,8 +213,29 @@ export function precoPorBase(insumo, precoCompra) {
   return (precoCompra / insumo.compra.qtdUso) * BASE_EXIBICAO[insumo.uso].fator;
 }
 
+/** Última compra do histórico, ou null se o insumo ainda não teve compra (ex.: acabou de ser cadastrado). */
 export function ultimaCompra(insumo) {
-  return insumo.historico[insumo.historico.length - 1];
+  return insumo.historico[insumo.historico.length - 1] ?? null;
+}
+
+// ---- Cadastro (usado pelo módulo de Insumos e Fornecedores) -----------------------------
+
+const porId = new Map(INSUMOS.map((i) => [i.id, i]));
+export const buscarInsumo = (id) => porId.get(id) ?? null;
+export const insumosAtivos = () => INSUMOS.filter((i) => i.ativo !== false);
+
+export function adicionarInsumo(insumo) {
+  INSUMOS.push(insumo);
+  porId.set(insumo.id, insumo);
+  return insumo;
+}
+
+export const buscarFornecedor = (id) => FORNECEDORES.find((f) => f.id === id) ?? null;
+export const fornecedoresAtivos = () => FORNECEDORES.filter((f) => f.ativo !== false);
+
+export function adicionarFornecedor(fornecedor) {
+  FORNECEDORES.push(fornecedor);
+  return fornecedor;
 }
 
 /** Variação (em fração) da última compra sobre a anterior. */
